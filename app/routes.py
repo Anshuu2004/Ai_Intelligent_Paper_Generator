@@ -496,26 +496,26 @@ Begin generating the question paper now:
                 )
                 
 
-            # NEW: Convert chapter names from the form into a list of chapter IDs for the query
-            chapter_id_list = []
-            if chapters:
-                chapter_objects = Chapter.query.filter(Chapter.title_en.in_(chapters)).all()
-                chapter_id_list = [c.chapter_id for c in chapter_objects]
+                # NEW: Convert chapter names from the form into a list of chapter IDs for the query
+                chapter_id_list = []
+                if chapters:
+                    chapter_objects = Chapter.query.filter(Chapter.title_en.in_(chapters)).all()
+                    chapter_id_list = [c.chapter_id for c in chapter_objects]
 
-            # NEW: Correctly filter using JOINs or chapter IDs
-            if chapter_id_list:
-                # If chapters are provided, filter by their IDs (this is the most precise method)
-                query = query.filter(Question.chapter_id.in_(chapter_id_list))
-            elif topic_present:
-                # Fallback for topic-based search
-                query = query.filter(Question.question_text.contains(topic))
-            else:
-                # Fallback for general class/subject search (uses JOINs)
-                query = query.join(Chapter).join(Subject)
-                if subject:
-                    query = query.filter(Subject.name_en == subject)
-                if class_:
-                    query = query.join(Class).filter(Class.class_number == class_)
+                # NEW: Correctly filter using JOINs or chapter IDs
+                if chapter_id_list:
+                    # If chapters are provided, filter by their IDs (this is the most precise method)
+                    query = query.filter(Question.chapter_id.in_(chapter_id_list))
+                elif topic_present:
+                    # Fallback for topic-based search
+                    query = query.filter(Question.question_text.contains(topic))
+                else:
+                    # Fallback for general class/subject search (uses JOINs)
+                    query = query.join(Chapter).join(Subject)
+                    if subject:
+                        query = query.filter(Subject.name_en == subject)
+                    if class_:
+                        query = query.join(Class).filter(Class.class_number == class_)
                 
                 # Get more questions than needed to filter duplicates
                 db_questions = (
@@ -910,6 +910,3 @@ def download_answer_key(paper_id):
         download_name=f"answer_key_{paper_id}.pdf",
         mimetype="application/pdf"
     )
-
-
-
