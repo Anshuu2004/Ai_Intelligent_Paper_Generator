@@ -7,7 +7,7 @@ import google.generativeai as genai
 load_dotenv()
 
 db = SQLAlchemy()
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+if os.getenv("GOOGLE_API_KEY"): genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 def create_app():
     app = Flask(__name__, template_folder="templates", static_folder="static")
@@ -16,12 +16,12 @@ def create_app():
 
     if not database_url:
         db_user = os.getenv("DB_USER")
-        db_password = os.getenv("DB_PASSWORD")
+        db_password = os.getenv("DB_PASSWORD", "")
         db_host = os.getenv("DB_HOST")
-        db_port = os.getenv("DB_PORT", "3306")
+        db_port = os.getenv("DB_PORT") or "3306"
         db_name = os.getenv("DB_NAME")
 
-        if db_user and db_password and db_host and db_name:
+        if db_user and db_host and db_name:
             database_url = (
                 f"mysql+pymysql://{db_user}:{db_password}"
                 f"@{db_host}:{db_port}/{db_name}"
