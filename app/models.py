@@ -34,7 +34,7 @@ class Chapter(db.Model):
     chapter_number = db.Column(db.Integer)
     title_en = db.Column(db.String(255), nullable=False)
     title_hi = db.Column(db.String(255), nullable=False)
-    questions = db.relationship("Question", backref="chapter", lazy=True)
+    questions = db.relationship("Question", backref="chapter", lazy=True, cascade="all, delete-orphan")
 
 # MODIFIED Question model
 class Question(db.Model):
