@@ -75,8 +75,6 @@ def render_simple_math(text):
 
 
 
-
-
 def get_or_create_visitor():
     """Get existing visitor from cookie or create new visitor"""
     visitor_id = request.cookies.get('visitor_id')
@@ -439,23 +437,23 @@ Begin generating the question paper now:
             q_type = _normalize_qtype(q.get("type"))
             q_text = q.get("question", "")
             
-            # Only save to DB if we found a chapter to link it to
-            if first_chapter_id:
-                new_q = Question(
-                    chapter_id=first_chapter_id,
-                    question_type=q_type,
-                    difficulty=q.get("difficulty"),
-                    marks=q.get("marks"),
-                    question_text=q_text,
-                    options=q.get("options") if q_type == "MCQ" else None,
-                    answer=q.get("answer", "Not provided"),
-                    source="AI",
-                    explanation=q.get("explanation", ""),
-                    language=paper_language
-                )
-                db.session.add(new_q)
-                db.session.flush() # Use flush to get the ID before committing
-                q['id'] = new_q.id # Add the new database ID to the question object
+            # Always create a new Question object, allowing chapter_id to be None if not found.
+            # This ensures every AI-generated question gets an ID and is stored in the Question table.
+            new_q = Question(
+                chapter_id=first_chapter_id,
+                question_type=q_type,
+                difficulty=q.get("difficulty"),
+                marks=q.get("marks"),
+                question_text=q_text,
+                options=q.get("options") if q_type == "MCQ" else None,
+                answer=q.get("answer", "Not provided"),
+                source="AI",
+                explanation=q.get("explanation", ""),
+                language=paper_language
+            )
+            db.session.add(new_q)
+            db.session.flush() # Use flush to get the ID before committing
+            q['id'] = new_q.id # Add the new database ID to the question object
 
             q['source'] = "AI"
             q['question_type'] = q_type
@@ -496,28 +494,29 @@ Begin generating the question paper now:
                 )
                 
 
-            # NEW: Convert chapter names from the form into a list of chapter IDs for the query
-            chapter_id_list = []
-            if chapters:
-                chapter_objects = Chapter.query.filter(Chapter.title_en.in_(chapters)).all()
-                chapter_id_list = [c.chapter_id for c in chapter_objects]
+                # NEW: Convert chapter names from the form into a list of chapter IDs for the query
+                chapter_id_list = []
+                if chapters:
+                    chapter_objects = Chapter.query.filter(Chapter.title_en.in_(chapters)).all()
+                    chapter_id_list = [c.chapter_id for c in chapter_objects]
 
-            # NEW: Correctly filter using JOINs or chapter IDs
-            if chapter_id_list:
-                # If chapters are provided, filter by their IDs (this is the most precise method)
-                query = query.filter(Question.chapter_id.in_(chapter_id_list))
-            elif topic_present:
-                # Fallback for topic-based search
-                query = query.filter(Question.question_text.contains(topic))
-            else:
-                # Fallback for general class/subject search (uses JOINs)
-                query = query.join(Chapter).join(Subject)
-                if subject:
-                    query = query.filter(Subject.name_en == subject)
-                if class_:
-                    query = query.join(Class).filter(Class.class_number == class_)
+                # NEW: Correctly filter using JOINs or chapter IDs
+                if chapter_id_list:
+                    # If chapters are provided, filter by their IDs (this is the most precise method)
+                    query = query.filter(Question.chapter_id.in_(chapter_id_list))
+                elif topic_present:
+                    # Fallback for topic-based search
+                    query = query.filter(Question.question_text.contains(topic))
+                else:
+                    # Fallback for general class/subject search (uses JOINs)
+                    query = query.join(Chapter).join(Subject)
+                    if subject:
+                        query = query.filter(Subject.name_en == subject)
+                    if class_:
+                        query = query.join(Class).filter(Class.class_number == class_)
                 
                 # Get more questions than needed to filter duplicates
+                # This block was incorrectly indented within the 'else' before; now it always runs if missing_for_type > 0
                 db_questions = (
                     query
                     .order_by(func.rand())
@@ -910,6 +909,3 @@ def download_answer_key(paper_id):
         download_name=f"answer_key_{paper_id}.pdf",
         mimetype="application/pdf"
     )
-
-
-
