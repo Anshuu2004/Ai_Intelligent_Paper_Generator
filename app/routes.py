@@ -29,9 +29,11 @@ main = Blueprint("main", __name__)
 def db_test():
     try:
         db.session.execute("SELECT 1")
-        return "✅ Database connected successfully!"
+        return "
+ Database connected successfully!"
     except Exception as e:
-        return f"❌ DB error: {e}"
+        return f"
+ DB error: {e}"
 
 @main.route("/debug-questions")
 def debug_questions():
@@ -50,16 +52,26 @@ def render_simple_math(text):
         return ""
     
     # 1. Remove surrounding $ signs (which the AI uses for LaTeX)
-    text = re.sub(r'^\s*\$', '', text)
-    text = re.sub(r'\$\s*$', '', text)
+    text = re.sub(r'^
+*
+$', '', text)
+    text = re.sub(r'
+*
+$', '', text)
     
     # 2. Replace common LaTeX commands with Unicode/HTML symbols
-    text = text.replace(r'\times', '×')      # Multiplication symbol
-    text = text.replace(r'^\circ', '°')       # Degree symbol (used in 40^\circ)
-    text = text.replace(r'\circ', '°')        # Degree symbol
-    text = text.replace(r'\le', '≤')
-    text = text.replace(r'\ge', '≥')
-    text = text.replace(r'\ne', '≠')
+    text = text.replace(r'\times', '
+')      # Multiplication symbol
+    text = text.replace(r'^\circ', '
+')       # Degree symbol (used in 40^\circ)
+    text = text.replace(r'\circ', '
+')        # Degree symbol
+    text = text.replace(r'\le', '
+')
+    text = text.replace(r'\ge', '
+')
+    text = text.replace(r'\ne', '
+')
     
     # 3. Handle simple superscripts (e.g., 3^2 -> 3<sup>2</sup>)
     # This is a simplification; WeasyPrint supports <sup> tags.
@@ -70,7 +82,6 @@ def render_simple_math(text):
     text = re.sub(r'\\frac\{([^}]+)\}\{([^}]+)\}', r'<sup>\1</sup>&frasl;<sub>\2</sub>', text)
     
     return text
-
 
 
 
@@ -160,12 +171,13 @@ def get_academic_data():
 def index():
     response = make_response(render_template("index.html"))
     
-    # Check if visitor cookie exists
-    visitor_id = request.cookies.get('visitor_id')
-    if not visitor_id:
-        # Create new visitor and set cookie
-        visitor = get_or_create_visitor()
-        response.set_cookie('visitor_id', visitor.visitor_id, max_age=365*24*60*60)  # 1 year
+    # Always get or create visitor. This handles incrementing visit_count for existing visitors
+    # and creates a new one if none exists.
+    visitor = get_or_create_visitor()
+    
+    # Always set the cookie. This ensures it's present for new visitors and refreshes
+    # the max_age for existing ones.
+    response.set_cookie('visitor_id', visitor.visitor_id, max_age=365*24*60*60)  # 1 year
     
     return response
 
@@ -193,8 +205,8 @@ def generate_paper():
     ddist = data.get("difficultyDistribution", {})
     exam_name = data.get("examName")
     paper_language = data.get("paperLanguage", "english")
-    topic = data.get("topic", "")  # Get topic if provided
-    chapters = data.get("chapters", [])  # Get chapters if provided
+    topic = data.get("topic", "")
+    chapters = data.get("chapters", [])
     questions = []
 
     # Get or create visitor
@@ -210,21 +222,30 @@ def generate_paper():
     # Log all the data to debug
     current_app.logger.info(f"All data received: {data}")
     
-    # Test if API key is working
-    try:
-        current_app.logger.info("Testing Google Generative AI API key")
-        model = genai.GenerativeModel('models/gemini-flash-latest')
-        test_response = model.generate_content("Say 'Hello, World!' in one word.")
-        current_app.logger.info(f"API key test response: {test_response.text.strip()}")
-    except Exception as e:
-        current_app.logger.error(f"API key test failed: {e}")
+    # Test if API key is working - improved model selection
+    model_names = ['models/gemini-flash-latest', 'models/gemini-pro-latest', 'models/gemini-2.0-flash']
+    model = None
+    for model_name in model_names:
+        try:
+            current_app.logger.info(f"Attempting to create GenerativeModel with '{model_name}'")
+            model = genai.GenerativeModel(model_name)
+            test_response = model.generate_content("Say 'Hello, World!' in one word.")
+            current_app.logger.info(f"API key test response for {model_name}: {test_response.text.strip()}")
+            break # Found a working model, break loop
+        except Exception as e:
+            current_app.logger.error(f"API key test failed with {model_name}: {e}")
+    
+    if not model:
+        current_app.logger.error("Failed to initialize any Google Generative AI model.")
+        return jsonify({"error": "Failed to initialize AI model. Please check API key and network."}), 500
     
     qdist_str_parts = []
     for qtype, info in qdist.items():
         count = info.get('count', 0)
         if count > 0:
             qdist_str_parts.append(f"- {count} {qtype} question(s)")
-    qdist_prompt_str = "\n".join(qdist_str_parts)
+    qdist_prompt_str = "
+".join(qdist_str_parts)
     
     language_instruction = ""
     if paper_language == "hindi" and subject.lower() != "english":
@@ -343,39 +364,15 @@ Example MCQ format:
 Begin generating the question paper now:
 """
             
-        # Log the prompt to see what's being sent to the AI
         current_app.logger.info(f"Sending prompt to AI: {prompt}")
         
-        # Use the already configured genai from __init__.py
-        # Using getattr to avoid linter issues
         try:
-            current_app.logger.info("Attempting to create GenerativeModel with 'models/gemini-flash-latest'")
-            model = genai.GenerativeModel("models/gemini-flash-latest")  # Using the latest flash model
-            current_app.logger.info("Model created successfully, sending prompt")
-            response = model.generate_content(prompt)
+            response = model.generate_content(prompt) # Use the model determined earlier
             raw_text = response.text.strip()
             current_app.logger.info("Response received successfully")
-        except Exception as model_error:
-            current_app.logger.error(f"AI model error with models/gemini-flash-latest: {model_error}")
-            # Try a fallback model
-            try:
-                current_app.logger.info("Attempting fallback with 'models/gemini-pro-latest'")
-                model = genai.GenerativeModel("models/gemini-pro-latest")  # Fallback to latest pro model
-                response = model.generate_content(prompt)
-                raw_text = response.text.strip()
-                current_app.logger.info("Fallback response received successfully")
-            except Exception as fallback_error:
-                current_app.logger.error(f"AI model error with fallback models/gemini-pro-latest: {fallback_error}")
-                # Try another fallback model
-                try:
-                    current_app.logger.info("Attempting fallback with 'models/gemini-2.0-flash'")
-                    model = genai.GenerativeModel("models/gemini-2.0-flash")  # Another fallback option
-                    response = model.generate_content(prompt)
-                    raw_text = response.text.strip()
-                    current_app.logger.info("Second fallback response received successfully")
-                except Exception as second_fallback_error:
-                    current_app.logger.error(f"AI model error with second fallback models/gemini-2.0-flash: {second_fallback_error}")
-                    raise second_fallback_error
+        except Exception as model_generation_error:
+            current_app.logger.error(f"AI model generation failed: {model_generation_error}")
+            raise model_generation_error # Re-raise to trigger outer exception handling
         
         # Log the AI response
         current_app.logger.info(f"AI response: {raw_text}")
@@ -436,16 +433,22 @@ Begin generating the question paper now:
         # This block now correctly saves questions with a chapter_id
         processed_questions = []
         for q in questions: # Note: 'questions' here is the list from the AI
-            q_type = _normalize_qtype(q.get("type"))
+            q_type = q.get("question_type") # Use the already normalized 'question_type' field
             q_text = q.get("question", "")
             
             # Only save to DB if we found a chapter to link it to
             if first_chapter_id:
+                try:
+                    marks_int = int(q.get("marks"))
+                except (ValueError, TypeError):
+                    current_app.logger.warning(f"Invalid marks value received from AI: {q.get('marks')}. Defaulting to 1.")
+                    marks_int = 1 # Default or handle as appropriate
+
                 new_q = Question(
                     chapter_id=first_chapter_id,
                     question_type=q_type,
                     difficulty=q.get("difficulty"),
-                    marks=q.get("marks"),
+                    marks=marks_int, # Cast to int
                     question_text=q_text,
                     options=q.get("options") if q_type == "MCQ" else None,
                     answer=q.get("answer", "Not provided"),
@@ -478,7 +481,6 @@ Begin generating the question paper now:
     if len(questions) < total_needed:
         for qtype_frontend, info in qdist.items():
             count_needed = int(info['count'])
-            marks = int(info['marks'])
             
             # --- FIX #4: USE NORMALIZED TYPE FOR COUNTING AND QUERYING ---
             normalized_type = _normalize_qtype(qtype_frontend)
@@ -488,35 +490,45 @@ Begin generating the question paper now:
             missing_for_type = max(0, count_needed - picked_count)
 
             if missing_for_type > 0:
+                # Cast marks for the query
+                try:
+                    marks_int = int(info['marks'])
+                except (ValueError, TypeError):
+                    current_app.logger.warning(f"Invalid marks value in qdist for type {qtype_frontend}: {info['marks']}. Defaulting to 1 for DB query.")
+                    marks_int = 1
+
                 # Create the base query with exact criteria ONLY
                 query = Question.query.filter_by(
                     question_type=normalized_type, 
-                    marks=marks, 
+                    marks=marks_int, 
                     language=paper_language
                 )
                 
 
-            # NEW: Convert chapter names from the form into a list of chapter IDs for the query
-            chapter_id_list = []
-            if chapters:
-                chapter_objects = Chapter.query.filter(Chapter.title_en.in_(chapters)).all()
-                chapter_id_list = [c.chapter_id for c in chapter_objects]
+                # NEW: Convert chapter names from the form into a list of chapter IDs for the query
+                chapter_id_list = []
+                if chapters:
+                    chapter_objects = Chapter.query.filter(Chapter.title_en.in_(chapters)).all()
+                    chapter_id_list = [c.chapter_id for c in chapter_objects]
 
-            # NEW: Correctly filter using JOINs or chapter IDs
-            if chapter_id_list:
-                # If chapters are provided, filter by their IDs (this is the most precise method)
-                query = query.filter(Question.chapter_id.in_(chapter_id_list))
-            elif topic_present:
-                # Fallback for topic-based search
-                query = query.filter(Question.question_text.contains(topic))
-            else:
-                # Fallback for general class/subject search (uses JOINs)
-                query = query.join(Chapter).join(Subject)
-                if subject:
-                    query = query.filter(Subject.name_en == subject)
-                if class_:
-                    query = query.join(Class).filter(Class.class_number == class_)
-                
+                # NEW: Correctly filter using JOINs or chapter IDs
+                if chapter_id_list:
+                    # If chapters are provided, filter by their IDs (this is the most precise method)
+                    query = query.filter(Question.chapter_id.in_(chapter_id_list))
+                elif topic_present:
+                    # Fallback for topic-based search
+                    query = query.filter(Question.question_text.contains(topic))
+                else:
+                    # Fallback for general class/subject search (uses JOINs)
+                    # Ensure all necessary joins are present
+                    query = query.join(Chapter).join(Subject).join(Class).join(Board) 
+                    if board: # Filter by board name
+                        query = query.filter(Board.name == board)
+                    if class_:
+                        query = query.filter(Class.class_number == class_)
+                    if subject:
+                        query = query.filter(Subject.name_en == subject)
+                    
                 # Get more questions than needed to filter duplicates
                 db_questions = (
                     query
@@ -595,7 +607,12 @@ Begin generating the question paper now:
         pq.question_text = q.get("question_text")
         pq.type = q.get("question_type")
         pq.difficulty = q.get("difficulty")
-        pq.marks = q.get("marks")
+        # Ensure marks for PaperQuestion are also cast to int
+        try:
+            pq.marks = int(q.get("marks", 0))
+        except (ValueError, TypeError):
+            current_app.logger.warning(f"Invalid marks value for PaperQuestion: {q.get('marks')}. Defaulting to 0.")
+            pq.marks = 0
         pq.options = q.get("options") if q.get("options") else None
         pq.answer = q.get("answer", "Not provided")
         db.session.add(pq)
@@ -910,6 +927,3 @@ def download_answer_key(paper_id):
         download_name=f"answer_key_{paper_id}.pdf",
         mimetype="application/pdf"
     )
-
-
-
