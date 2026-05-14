@@ -62,7 +62,8 @@ def create_app():
     # Same-origin by default; widen CORS only if frontend is hosted separately.
     cors_origins = os.getenv("CORS_ORIGINS", "").strip()
     if cors_origins:
-        CORS(app, resources={r"/api/*": {"origins": cors_origins.split(",")}})
+        allowed_origins = [o.strip() for o in cors_origins.split(",") if o.strip()]
+        CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
     else:
         CORS(app, resources={r"/api/*": {"origins": []}})
 
